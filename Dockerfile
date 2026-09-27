@@ -4,12 +4,17 @@
 # and the stock nonroot stage that listens on 8000 is NOT what we build).
 FROM roundcube/roundcubemail:1.7.4-apache
 
-# Railway platform fix: php:N-apache based images die at boot on Railway with
-# "AH00534: apache2: Configuration error: More than one MPM loaded" (works
-# fine locally; seen platform-wide). Force a single MPM — prefork, the classic
-# mod_php choice — before anything else runs.
-RUN a2dismod mpm_event mpm_worker 2>/dev/null || true; \
-    a2enmod mpm_prefork
+# Railway platform fix: the 1.7.4-apache image ships BOTH mpm_event and
+# mpm_prefork enabled, which kills Apache at boot with
+# "AH00534: apache2: Configuration error: More than one MPM loaded".
+# (a2dismod turned out unreliable here — it silently left mpm_event enabled —
+# so remove the module links directly.) Keep exactly one MPM: prefork, the
+# mod_php requirement (php.load is enabled).
+RUN rm -f /etc/apache2/mods-enabled/mpm_event.load /etc/apache2/mods-enabled/mpm_event.conf \
+        /etc/apache2/mods-enabled/mpm_worker.load /etc/apache2/mods-enabled/mpm_worker.conf; \
+    ln -sf ../mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load; \
+    ln -sf ../mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf; \
+    echo "MPM modules enabled after fix:"; ls /etc/apache2/mods-enabled/ | grep mpm
 
 # Static defaults baked into the image so the published Railway template stays
 # zero-prompt (literal service variables would surface as deploy-form prompts).
