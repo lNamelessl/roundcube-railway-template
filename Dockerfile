@@ -7,14 +7,19 @@ FROM roundcube/roundcubemail:1.7.4-apache
 # Railway platform fix: the 1.7.4-apache image ships BOTH mpm_event and
 # mpm_prefork enabled, which kills Apache at boot with
 # "AH00534: apache2: Configuration error: More than one MPM loaded".
-# (a2dismod turned out unreliable here — it silently left mpm_event enabled —
-# so remove the module links directly.) Keep exactly one MPM: prefork, the
-# mod_php requirement (php.load is enabled).
-RUN rm -f /etc/apache2/mods-enabled/mpm_event.load /etc/apache2/mods-enabled/mpm_event.conf \
-        /etc/apache2/mods-enabled/mpm_worker.load /etc/apache2/mods-enabled/mpm_worker.conf; \
+#
+# Railway's runtime re-materializes files that a later image layer only
+# DELETED (a2dismod and plain `rm` both silently reverted at container start),
+# while CREATE operations stick — so every stray MPM link is replaced with a
+# real comment-only file (rm + create), and prefork (the mod_php requirement,
+# php.load is enabled) is re-linked explicitly.
+RUN for f in mpm_event.load mpm_event.conf mpm_worker.load mpm_worker.conf; do \
+        rm -f "/etc/apache2/mods-enabled/$f"; \
+        printf '# disabled for Railway: only one MPM may load (AH00534)\n' > "/etc/apache2/mods-enabled/$f"; \
+    done; \
     ln -sf ../mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load; \
     ln -sf ../mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf; \
-    echo "MPM modules enabled after fix:"; ls /etc/apache2/mods-enabled/ | grep mpm
+    echo "=== MPM entries after fix ==="; ls -l /etc/apache2/mods-enabled/ | grep mpm
 
 # Static defaults baked into the image so the published Railway template stays
 # zero-prompt (literal service variables would surface as deploy-form prompts).
