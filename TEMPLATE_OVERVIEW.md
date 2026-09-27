@@ -41,9 +41,15 @@ own Dovecot/Postfix/Zimbra host, etc.). Every user signs in with their
 ## Deploy
 
 1. Click **Deploy on Railway**.
-2. Wait ~2 minutes — both services go healthy, the DB schema initializes on
-   first boot.
-3. Open the `roundcube` domain and log in with your **mail credentials**:
+2. The `roundcube` service needs **no input**. If the form lists the Postgres
+   plugin's internal variables, keep the standard values:
+   `PGDATA=/var/lib/postgresql/data/pgdata`, `POSTGRES_USER=postgres`,
+   `POSTGRES_DB=railway`, `PGPORT=5432`, `SSL_CERT_DAYS=820`,
+   `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=60`.
+3. Wait ~2 minutes — both services go healthy, the DB schema initializes on
+   first boot (Postgres first init can take ~1–2 minutes; one or two
+   automatic restarts of roundcube are normal).
+4. Open the `roundcube` domain and log in with your **mail credentials**:
 
 | Provider | Username field | Notes |
 |---|---|---|

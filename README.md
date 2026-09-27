@@ -54,12 +54,38 @@ their normal host/port/credentials.
 ## Deploy
 
 1. Click the deploy button (or `railway deploy -t roundcube-template`).
-2. Wait for both services to go healthy — Roundcube waits up to 120 s for
-   Postgres and initializes the schema on first boot.
-3. Open the `roundcube` domain. Log in with your mail credentials
+2. The roundcube service needs **no input**. The Postgres database plugin
+   captures its internal variables; if the deploy form asks for them, use
+   these standard values:
+
+   | Variable | Value |
+   |---|---|
+   | `PGDATA` | `/var/lib/postgresql/data/pgdata` |
+   | `POSTGRES_USER` | `postgres` |
+   | `POSTGRES_DB` | `railway` |
+   | `PGPORT` | `5432` |
+   | `SSL_CERT_DAYS` | `820` |
+   | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `60` |
+
+3. Wait for both services to go healthy — Roundcube waits up to 120 s for
+   Postgres and initializes the schema on first boot (Postgres first init can
+   take ~1–2 minutes; one or two automatic restarts are normal).
+4. Open the `roundcube` domain. Log in with your mail credentials
    (`user@domain` for Gmail; some providers want just the local part — set
    `ROUNDCUBEMAIL_USERNAME_DOMAIN` if your provider expects `user` + a domain
    appended automatically).
+
+CLI one-liner (supplies the Postgres plugin values itself):
+
+```
+railway deploy -t roundcube-template \
+  -v "Postgres.PGDATA=/var/lib/postgresql/data/pgdata" \
+  -v "Postgres.POSTGRES_USER=postgres" \
+  -v "Postgres.POSTGRES_DB=railway" \
+  -v "Postgres.PGPORT=5432" \
+  -v "Postgres.SSL_CERT_DAYS=820" \
+  -v "Postgres.RAILWAY_DEPLOYMENT_DRAINING_SECONDS=60"
+```
 
 ## Health & operations
 
