@@ -1,90 +1,126 @@
-# Template Overview — Roundcube Webmail on Railway
+# Roundcube Webmail — One-Click Railway Template
 
-**Short description (≤75 chars):**
-Roundcube webmail with Postgres — bring your own IMAP/SMTP provider
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/siITGk)
 
-## Positioning
+**Roundcube webmail with Postgres — bring your own IMAP/SMTP provider.**
 
-Roundcube is the classic open-source webmail client (99⭐ class demand in the
-YunoHost gap scan; zero Railway presence). This template gives it a one-click
-home on Railway with Postgres for settings/contacts/sessions, pointed at any
-IMAP/SMTP provider the deployer already has.
+Roundcube is the classic open-source webmail client: a fast, skinable,
+plugin-rich browser interface for any IMAP mailbox. This template provisions
+Roundcube plus a Postgres database on Railway in one click, pre-wired to the
+mail provider of your choice (Gmail by default).
 
-**Scope disclosure (must stay in the listing):** Roundcube is a webmail
-*client*, not a mail server. It does not host mailboxes or accept MX traffic;
-users read/send through an external IMAP/SMTP provider (Gmail, Fastmail,
-Mailgun, a self-hosted Dovecot/Postfix, etc.).
+**Scope note (important):** Roundcube is a webmail *client*, not a mail
+server. It does not host mailboxes, accept MX delivery, or manage accounts —
+it connects to an existing IMAP/SMTP provider (Gmail, Fastmail, Mailgun, your
+own Dovecot/Postfix/Zimbra host, etc.). Every user signs in with their
+**mail-server credentials**; there is no admin account by design.
 
-## What the template provisions
+## What you get
 
-| Service | Source | Purpose |
+| Service | What it runs | Purpose |
 |---|---|---|
-| `roundcube` | Builds `Dockerfile` in this repo → `roundcube/roundcubemail:1.7.4-apache` | Webmail UI, Apache on port 80 |
-| `Postgres` | Railway `postgres` database plugin | Settings, address book, sessions |
+| `roundcube` | `roundcube/roundcubemail:1.7.4-apache` (pinned), built from this repo's Dockerfile | The webmail UI on your Railway domain (port 80) |
+| `Postgres` | Railway Postgres plugin | Settings, address book, identities, sessions |
 
-- Volume: `/var/roundcube/enigma` on the roundcube service (PGP keyring,
-  persists across redeploys).
-- Domain: HTTP domain on the roundcube service, target port 80.
+**Zero deploy-form prompts** — everything is preconfigured:
 
-## Variables (serializedConfig expectations)
+- Postgres coordinates are wired automatically via Railway expressions
+  (`ROUNDCUBEMAIL_DB_HOST/USER/PASSWORD/NAME` → the Postgres service; the DB
+  password is generated per deployment).
+- Mail provider defaults are baked in and overridable as plain service
+  variables after deploy: `ROUNDCUBEMAIL_DEFAULT_HOST` (IMAP,
+  `ssl://imap.gmail.com`), `ROUNDCUBEMAIL_DEFAULT_PORT` (993),
+  `ROUNDCUBEMAIL_SMTP_SERVER` (SMTP, `tls://smtp.gmail.com`),
+  `ROUNDCUBEMAIL_SMTP_PORT` (587).
+- Plugins enabled: `archive` (one-click archiving), `zipdownload` (download
+  messages/attachments as zip), `enigma` (OpenPGP sign/encrypt — keys persist
+  on the `/var/roundcube/enigma` volume).
+- First boot waits up to 120 s for Postgres, creates the schema
+  automatically, and serves a static `/health.php` endpoint.
 
-`roundcube` service — expression-only, zero deploy-form prompts:
+## Deploy
 
-- `ROUNDCUBEMAIL_DB_HOST = ${{Postgres.PGHOST}}`
-- `ROUNDCUBEMAIL_DB_USER = ${{Postgres.PGUSER}}`
-- `ROUNDCUBEMAIL_DB_PASSWORD = ${{Postgres.PGPASSWORD}}`
-- `ROUNDCUBEMAIL_DB_NAME = ${{Postgres.PGDATABASE}}`
+1. Click **Deploy on Railway**.
+2. Wait ~2 minutes — both services go healthy, the DB schema initializes on
+   first boot.
+3. Open the `roundcube` domain and log in with your **mail credentials**:
 
-Everything else (DB type/port, IMAP/SMTP defaults, plugins) is baked as ENV in
-the Dockerfile — literals never appear as service variables, so the deploy form
-has no prompts.
+| Provider | Username field | Notes |
+|---|---|---|
+| Gmail / Workspace | full address (`you@gmail.com`) | Google requires an **App Password** (2FA on) or Workspace with IMAP enabled |
+| Fastmail / Mailgun IMAP / Zimbra | as your provider documents | Override the four `ROUNDCUBEMAIL_*` host/port variables to match |
+| Self-hosted Dovecot/Postfix | as configured | Point the IMAP/SMTP variables at your host with `ssl://` or `tls://` prefixes |
 
-## Design decisions (verified against roundcubemail-docker 1.7.4)
+## Troubleshooting
 
-1. **Port 80.** The `:apache` root stage listens on 80 (its `EXPOSE 8000` /
-   `:8000` vhost belongs to the `-nonroot` variant we do not build). The
-   domain pins targetPort 80.
-2. **DB wait hook (pre-setup).** The stock entrypoint waits only 30 s
-   (`/wait-for-it.sh -t 30`) and — worse — does not abort when schema init
-   fails; it starts Apache anyway. `railway-pre-setup.sh` runs from the
-   image's `/entrypoint-tasks/pre-setup/` hook dir, waits up to 120 s via
-   PHP `fsockopen`, and exits 1 on timeout so ON_FAILURE restarts.
-3. **Health endpoint (post-setup).** Roundcube 1.7 has no `/login` route
-   (front controller only) and the stock image ships no health route.
-   `railway-post-setup.sh` runs from `/entrypoint-tasks/post-setup/` on every
-   boot and copies the static `health.php` into BOTH docroots
-   (`/var/www/html/` and `/var/www/html/public_html/` — 1.7 serves the
-   latter). It must be a runtime hook: the entrypoint tar-populates the
-   docroot at boot and warns + sleeps 10 s if it is not empty.
-   `railway.json` healthchecks `/health.php` (300 s timeout, ON_FAILURE × 10).
-4. **Enigma volume ownership.** Railway mounts volumes root:root; the
-   post-setup hook chowns `/var/roundcube/enigma` to www-data so PGP keys can
-   be written.
-5. **Zero admin login.** Users authenticate with their mail-server (IMAP)
-   credentials; there is no admin account to seed.
+- **"Login failed" with a correct password** — wrong IMAP host/port or TLS
+  prefix (IMAPS = `ssl://` + 993; STARTTLS = `tls://` + 143/587), or the
+  provider needs an App Password.
+- **Mail reads but won't send** — check `ROUNDCUBEMAIL_SMTP_SERVER`/`_PORT`;
+  port 465 needs `ssl://`, port 587 uses `tls://`.
+- **A few restarts on the very first deploy** — the container waits up to
+  120 s for Postgres and exits once if it is slower; the ON_FAILURE policy
+  retries automatically.
 
-## First-boot behavior
+# Deploy and Host
 
-1. Entrypoint pre-setup hook waits for Postgres (≤120 s).
-2. `bin/initdb.sh --dir=SQL --update` creates the schema on an empty DB,
-   applies migrations on existing ones.
-3. `config.docker.inc.php` regenerated from env on every boot (config is
-   env-driven; nothing to edit by hand).
-4. Post-setup hook writes `/health.php` into both docroots; Apache starts;
-   healthcheck passes.
+## About Hosting
 
-## Acceptance record
+Hosting Roundcube on Railway means the webmail client runs as a containerized
+Apache/PHP service while a managed Postgres holds settings, contacts, and
+sessions. The template provisions exactly two services: `roundcube` (built
+from the pinned `roundcube/roundcubemail:1.7.4-apache` image with a thin
+Railway wrapper) and the `Postgres` database plugin. Mail itself stays at your
+IMAP/SMTP provider, so there are no deliverability, PTR/DNS, or IP-reputation
+concerns to manage. The deploy form has no prompts: the database connection is
+injected through Railway variable expressions and the Postgres password is
+generated fresh per deployment. The database schema is created and migrated
+automatically on every boot (`bin/initdb.sh --update`), and PGP keys from the
+enigma plugin persist on a dedicated volume.
 
-- `/health.php` → 200 on the deployed domain
-- Postgres schema initialized (roundcube tables present, verified via psql)
-- `/?_task=login` → 200, Roundcube login page renders
-- `config.docker.inc.php` verified via `railway ssh` (imap_host/smtp_host/
-  plugins/db_dsnw rendered from env)
-- **Mail round-trip** via throwaway GreenMail service
-  (`greenmail/standalone:2.1.14`, IMAP :3143 / SMTP :3025, private
-  networking): scripted Roundcube login with `webmail@example.com` → compose +
-  send through Roundcube's SMTP → message verified in the GreenMail inbox via
-  its REST API. GreenMail removed after acceptance; defaults restored.
-- Persistence: marker file on the enigma volume + Postgres rows survive a
-  redeploy.
-- 2/2 fresh deploys from the published template reach `200 /health.php`.
+## Why Deploy
+
+- **One click, zero forms** — services, variables, domain, and volume are all
+  preconfigured; nothing to type at deploy time.
+- **Bring your own mail** — works with any IMAP/SMTP provider, so you keep
+  your existing addresses and mail history; switch providers by changing four
+  variables.
+- **No mail-server headaches** — you get the webmail UX without running an
+  MTA: no MX records, no spam-list risk, no TLS certificate juggling for
+  mail.
+- **Current and pinned** — Roundcube 1.7.4 (new layout, PHP 8.4) pinned so
+  upgrades are your decision.
+- **Operational niceties** — `/health.php` health endpoint, schema
+  auto-migration on boot, restart policy that rides out a cold database, and
+  PGP keys that survive redeploys.
+
+## Common Use Cases
+
+- A browser-based reader for a personal Gmail or Fastmail mailbox on your own
+  domain.
+- A self-hosted webmail front end for a company or family mail server
+  (Dovecot/Postfix, Zimbra, hMailServer).
+- Webmail for transactional-email teams who want to check an IMAP support or
+  reply-to inbox without a desktop client.
+- A privacy-conscious alternative to provider webmail: your own UI, your own
+  hosting, any backend.
+- A demo/testing client for mail infrastructure work (multiple providers,
+  new accounts, deliverability checks).
+
+## Dependencies for
+
+Roundcube needs an external IMAP/SMTP mail provider to be useful — that is
+the one thing you supply after deploy (mail credentials at the login screen).
+Everything else is included.
+
+### Deployment Dependencies
+
+- **Postgres** — provisioned automatically by this template (Railway database
+  plugin, schema auto-created on first boot; no action needed).
+- **IMAP + SMTP provider** — Gmail (default config), Fastmail, Mailgun,
+  Zimbra, or your own mail host. Override
+  `ROUNDCUBEMAIL_DEFAULT_HOST`, `ROUNDCUBEMAIL_DEFAULT_PORT`,
+  `ROUNDCUBEMAIL_SMTP_SERVER`, `ROUNDCUBEMAIL_SMTP_PORT` on the `roundcube`
+  service if not using Gmail.
+- **An App Password** for Gmail specifically (plain account passwords are
+  rejected by Google's IMAP/SMTP endpoints).

@@ -1,6 +1,6 @@
 # Roundcube Webmail — Railway Template
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template/roundcube-template)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/roundcube-template)
 
 Roundcube — the classic open-source webmail client — pre-wired to a Postgres
 backend on Railway, pointed at any IMAP/SMTP mail provider you choose
