@@ -4,6 +4,13 @@
 # and the stock nonroot stage that listens on 8000 is NOT what we build).
 FROM roundcube/roundcubemail:1.7.4-apache
 
+# Railway platform fix: php:N-apache based images die at boot on Railway with
+# "AH00534: apache2: Configuration error: More than one MPM loaded" (works
+# fine locally; seen platform-wide). Force a single MPM — prefork, the classic
+# mod_php choice — before anything else runs.
+RUN a2dismod mpm_event mpm_worker 2>/dev/null || true; \
+    a2enmod mpm_prefork
+
 # Static defaults baked into the image so the published Railway template stays
 # zero-prompt (literal service variables would surface as deploy-form prompts).
 # Only the per-deploy Postgres coordinates (ROUNDCUBEMAIL_DB_HOST / _USER /
