@@ -1,0 +1,8 @@
+# Force LF in the working tree for everything Railway builds/uploads —
+# especially the entrypoint hook scripts (/bin/sh dies on CRLF shebangs).
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.php text eol=lf
+*.json text eol=lf
+*.md text eol=lf
